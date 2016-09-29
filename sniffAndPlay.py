@@ -48,6 +48,13 @@ capture = pyshark.LiveCapture('Wi-Fi')
 # capture.apply_on_packets(printHeader, timeout=100)
 
 # AUDIO TEST
+Fs = 44100
+p = pyaudio.PyAudio()
+stream = p.open(format = pyaudio.paInt16,
+                        channels = 1,
+                        rate = Fs,
+                        input = False,
+                        output = True)
 
 # 16 bit/sample
 def playTone(pkt):
@@ -62,7 +69,7 @@ def playTone(pkt):
 
 
 
-        Fs = 16000
+
         # Fs = 32000
 
         T = 2       # T : Duration of audio to play (seconds)
@@ -73,7 +80,7 @@ def playTone(pkt):
         print f1
         om1 = 2.0*pi * float(f1)/Fs
 
-        Ta = 1.0    # Ta : Time till amplitude profile decays to 1% (in seconds)
+        Ta = 0.2 + (float(ipBroken[2]))     # Ta : Time till amplitude profile decays to 1% (in seconds)
         # Ta = 0.006
         r = 0.01**(1.0/(Ta*Fs))
 
@@ -92,12 +99,7 @@ def playTone(pkt):
         y2 = 0.0
         gain = 1000.0
 
-        p = pyaudio.PyAudio()
-        stream = p.open(format = pyaudio.paInt16,
-                        channels = 1,
-                        rate = Fs,
-                        input = False,
-                        output = True)
+
 
         for n in range(0, N):
 
@@ -124,14 +126,16 @@ def playTone(pkt):
 
             stream.write(str_out)
 
-        print("* done *")
+        # print("* done *")
 
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+
 
     except AttributeError as e:
         pass
 
 capture.apply_on_packets(playTone, timeout=100)
+
+stream.stop_stream()
+stream.close()
+p.terminate()
 
