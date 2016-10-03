@@ -57,83 +57,97 @@ stream = p.open(format = pyaudio.paInt16,
                         output = True)
 
 # 16 bit/sample
-def playTone(pkt):
-    try:
-    # Fs : Sampling frequency (samples/second)
-    # Fs = 8000
 
-        ip_id = pkt.ip.dst
+
+def gene_tone(f1,T,Ta):
+    # Fs = 32000
+
+    # T = 2       # T : Duration of audio to play (seconds)
+    N = int(T*Fs)    # N : Number of samples to play
+
+    # Pole location
+    # f1 = 700 + int(float(ipBroken[2]))   # Frequency
+    # print f1
+    om1 = 2.0*pi * float(f1)/Fs
+
+    # Ta = 0.2 + (float(ipBroken[2]))     # Ta : Time till amplitude profile decays to 1% (in seconds)
+    # Ta = 0.006
+    r = 0.01**(1.0/(Ta*Fs))
+
+    # print 'Fs = ', Fs
+    # print 'r = ', r
+
+    # Difference equation coefficients
+    a1 = -2*r*cos(om1)
+    a2 = r**2
+
+    # print 'a1 = ', a1
+    # print 'a2 = ', a2
+
+    # Initialization
+    y1 = 0.0
+    y2 = 0.0
+    gain = 1000.0
+
+
+
+    for n in range(0, N):
+
+
+        # Use impulse as input signal
+        if n == 0:
+            x0 = 1.0
+        else:
+            x0 = 0.0
+
+        # Difference equation
+        y0 = x0 - a1 * y1 - a2 * y2
+
+        # Delays
+        y2 = y1
+        y1 = y0
+
+        # Output
+        out = gain * y0
+        # print out
+        # if out >= 2^15:
+        #     out = 2^14
+
+        str_out = struct.pack('h', out)    # 'h' for 16 bits
+
+        stream.write(str_out)
+
+def play_tone(pkt):
+    try:
+        # Fs : Sampling frequency (samples/second)
+        # Fs = 8000
+
+        ip_id = pkt.ip.src
         # ascii_string = str(base64.b16decode(pkt.ip_id))[2:-1]
 
         ipBroken = ip_id.split('.')
 
+        #
+        # min3 = 6/5.0
+        # maj3 = 5/4.0
+        # per4 = 4/4.0
+        # per5 = 3/2.0
+        # min7 = 16/9.0
 
+        intervals = [1,1/2.0,6/5.0,5/4.0,4/4.0,3/2.0,16/9.0]
 
+        gene_tone(700 + int(float(ipBroken[2])), 0.2 , max(0.2, (float(ipBroken[2]))))
 
-        # Fs = 32000
+        for mel in range(0,3):
 
-        T = 2       # T : Duration of audio to play (seconds)
-        N = T*Fs    # N : Number of samples to play
+            gene_tone(random.choice(intervals)*(700 + int(float(ipBroken[2]))), 0.2 , max(0.2 , (float(ipBroken[2]))))
 
-        # Pole location
-        f1 = 700 + int(float(ipBroken[2]))   # Frequency
-        print f1
-        om1 = 2.0*pi * float(f1)/Fs
-
-        Ta = 0.2 + (float(ipBroken[2]))     # Ta : Time till amplitude profile decays to 1% (in seconds)
-        # Ta = 0.006
-        r = 0.01**(1.0/(Ta*Fs))
-
-        # print 'Fs = ', Fs
-        # print 'r = ', r
-
-        # Difference equation coefficients
-        a1 = -2*r*cos(om1)
-        a2 = r**2
-
-        # print 'a1 = ', a1
-        # print 'a2 = ', a2
-
-        # Initialization
-        y1 = 0.0
-        y2 = 0.0
-        gain = 1000.0
-
-
-
-        for n in range(0, N):
-
-            # Use impulse as input signal
-            if n == 0:
-                x0 = 1.0
-            else:
-                x0 = 0.0
-
-            # Difference equation
-            y0 = x0 - a1 * y1 - a2 * y2
-
-            # Delays
-            y2 = y1
-            y1 = y0
-
-            # Output
-            out = gain * y0
-            # print out
-            # if out >= 2^15:
-            #     out = 2^14
-
-            str_out = struct.pack('h', out)    # 'h' for 16 bits
-
-            stream.write(str_out)
-
-        # print("* done *")
-
-
+        print ip_id
 
     except AttributeError as e:
         pass
 
-capture.apply_on_packets(playTone, timeout=100)
+capture.apply_on_packets(play_tone, timeout=100)
 
 stream.stop_stream()
 stream.close()
