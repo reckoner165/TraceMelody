@@ -11,6 +11,11 @@ from math import pi
 import pyaudio
 import struct
 
+from pyo import *
+import time
+
+s = Server().boot()
+
 capture = pyshark.LiveCapture('Wi-Fi')
 
 # capture.sniff(timeout=20)
@@ -57,6 +62,24 @@ stream = p.open(format = pyaudio.paInt16,
                         output = True)
 
 # 16 bit/sample
+
+def gen_tone(A,D,S,R,F):
+    # s.start()
+    # a = Sine(F, 0, 0.1).out()
+
+    fm1 = FM(carrier=F, ratio=[1.5,max(1.49,R)], index=1.5, mul=0.1)
+    # fm1.ctrl()
+
+# CrossFM implements a frequency modulation synthesis where the
+# output of both oscillators modulates the frequency of the other one.
+    fm2 = CrossFM(carrier=F+10, ratio=[1.5,1.49], ind1=7, ind2=2, mul=0.1)
+    # fm2.ctrl()
+
+# Interpolates between input objects to produce a single output
+    sel = Selector([fm1, fm2]).out()
+
+    time.sleep(0.2)
+    # s.stop()
 
 
 def gene_tone(f1,T,Ta):
@@ -118,14 +141,27 @@ def gene_tone(f1,T,Ta):
         stream.write(str_out)
 
 def play_tone(pkt):
+
+    # Parameters
+
+    # src_addr = pkt.ip.src
+    # src_port = pkt[pkt.transport_layer].srcport
+    # dst_addr = pkt.ip.dst
+    # dst_port = pkt[pkt.transport_layer].dstport
+
+
+
     try:
-        # Fs : Sampling frequency (samples/second)
-        # Fs = 8000
 
         ip_id = pkt.ip.src
         # ascii_string = str(base64.b16decode(pkt.ip_id))[2:-1]
 
         ipBroken = ip_id.split('.')
+
+        print ip_id
+
+
+
 
         #
         # min3 = 6/5.0
@@ -136,20 +172,25 @@ def play_tone(pkt):
 
         intervals = [1,1/2.0,6/5.0,5/4.0,4/4.0,3/2.0,16/9.0]
 
-        gene_tone(700 + int(float(ipBroken[2])), 0.2 , max(0.2, (float(ipBroken[2]))))
-
+        # gene_tone(700 + int(float(ipBroken[2])), 0.2 , max(0.2, (float(ipBroken[2]))))
+        gen_tone(10,50,30,float(ipBroken[2])/100,100+int(float(ipBroken[2])))
         for mel in range(0,3):
+            gen_tone(10,50,30,10,random.choice(intervals)*(100+int(float(ipBroken[2]))))
+        #
+        #     # gene_tone(random.choice(intervals)*(700 + int(float(ipBroken[2]))), 0.2 , max(0.2 , (float(ipBroken[2]))))
+        #     gen_tone(int(float(ipBroken[3])),int(float(ipBroken[2])),int(float(ipBroken[1])),int(float(ipBroken[2])),random.choice(intervals)*(300+int(float(ipBroken[0]))))
 
-            gene_tone(random.choice(intervals)*(700 + int(float(ipBroken[2]))), 0.2 , max(0.2 , (float(ipBroken[2]))))
-
-        print ip_id
+        if pkt.ssl is not None:
+            print "SSL is here"
 
     except AttributeError as e:
         pass
 
+s.start()
 capture.apply_on_packets(play_tone, timeout=100)
-
+s.stop()
 stream.stop_stream()
 stream.close()
 p.terminate()
-
+s.shutdown()
+quit()
