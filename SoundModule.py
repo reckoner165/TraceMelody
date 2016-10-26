@@ -1,5 +1,8 @@
 __author__ = 'Sumanth Srinivasan'
 
+# Module containing real-time audio processing functions to generate tones and apply effects over a given block
+
+import math
 from math import cos
 from math import pi
 
@@ -21,10 +24,7 @@ def oscTone(T, Ta, f1,Fs):
     gain = 1000.0
 
     outBlock = [0 for n in range(0,N)]
-
     for n in range(0, N):
-
-
         # Use impulse as input signal
         if n == 0:
             x0 = 1.0
@@ -54,3 +54,43 @@ def clip(fraction,gain,block):
 
     return outBlock
 
+def vibrato(block,fL,WL,RATE):
+    outBlock = [0 for n in range(0,len(block))]
+    buffer_MAX = len(block)                          # Buffer length
+    bufferL = [0.0 for i in range(buffer_MAX)]
+
+    # Buffer (delay line) indices
+    krL = 0  # read index
+    kwL = int(0.5 * buffer_MAX)  # write index (initialize to middle of buffer)
+
+
+    for n in range(0,len(block)):
+        kr_prev = int(math.floor(krL))
+        kr_next = kr_prev + 1
+        frac = krL - kr_prev    # 0 <= frac < 1
+        if kr_next >= buffer_MAX:
+            kr_next = kr_next - buffer_MAX
+
+        # Compute output value using interpolation
+        outBlock[n] = (1-frac) * bufferL[kr_prev] + frac * bufferL[kr_next]
+
+        # Update buffer (pure delay)
+        bufferL[kwL] = block[n]
+
+        # Increment read index
+        krL = krL + 1 + WL * math.sin( 2 * math.pi * fL * n / RATE )
+            # Note: kr is fractional (not integer!)
+
+        # Ensure that 0 <= kr < buffer_MAX
+        if krL >= buffer_MAX:
+            # End of buffer. Circle back to front.
+            krL = 0
+
+        # Increment write index
+        kwL = kwL + 1
+        if kwL == buffer_MAX:
+            # End of buffer. Circle back to front.
+            kwL = 0
+
+
+    return outBlock

@@ -6,20 +6,36 @@ import base64
 import random
 import math
 
-from math import cos
-from math import pi
 import pyaudio
 import struct
+import SoundModule as sm
 
-from pyo import *
-import time
-
-s = Server().boot()
+import wave
 
 capture = pyshark.LiveCapture('Wi-Fi')
 
 # capture.sniff(timeout=20)
+def to_master(x):
+    # TO-DO:
+    # Include channel array/panning
+    str_out = struct.pack('h'*len(x), *x)  # 'h' for 16 bits
+    stream.write(str_out)
+    # wf.writeframes(str_out)
 
+Fs = 16000
+p = pyaudio.PyAudio()
+stream = p.open(format = pyaudio.paInt16,
+                        channels = 1,
+                        rate = Fs,
+                        input = False,
+                        output = True)
+
+
+# RECORD TO FILE
+# wf = wave.open('SERIAL.wav', 'w')		# wf : wave file
+# wf.setnchannels(1);		# one channel (mono)
+# wf.setsampwidth(2)		# four bytes per sample
+# wf.setframerate(Fs)		# samples per second
 
 
 # def printHeader(pkt):
@@ -52,145 +68,69 @@ capture = pyshark.LiveCapture('Wi-Fi')
 #
 # capture.apply_on_packets(printHeader, timeout=100)
 
-# AUDIO TEST
-Fs = 44100
-p = pyaudio.PyAudio()
-stream = p.open(format = pyaudio.paInt16,
-                        channels = 1,
-                        rate = Fs,
-                        input = False,
-                        output = True)
-
-# 16 bit/sample
-
-def gen_tone(A,D,S,R,F):
-    # s.start()
-    # a = Sine(F, 0, 0.1).out()
-
-    fm1 = FM(carrier=F, ratio=[1.5,max(1.49,R)], index=1.5, mul=0.1)
-    # fm1.ctrl()
-
-# CrossFM implements a frequency modulation synthesis where the
-# output of both oscillators modulates the frequency of the other one.
-    fm2 = CrossFM(carrier=F+10, ratio=[1.5,1.49], ind1=7, ind2=2, mul=0.1)
-    # fm2.ctrl()
-
-# Interpolates between input objects to produce a single output
-    sel = Selector([fm1, fm2]).out()
-
-    time.sleep(0.2)
-    # s.stop()
-
-
-def gene_tone(f1,T,Ta):
-    # Fs = 32000
-
-    # T = 2       # T : Duration of audio to play (seconds)
-    N = int(T*Fs)    # N : Number of samples to play
-
-    # Pole location
-    # f1 = 700 + int(float(ipBroken[2]))   # Frequency
-    # print f1
-    om1 = 2.0*pi * float(f1)/Fs
-
-    # Ta = 0.2 + (float(ipBroken[2]))     # Ta : Time till amplitude profile decays to 1% (in seconds)
-    # Ta = 0.006
-    r = 0.01**(1.0/(Ta*Fs))
-
-    # print 'Fs = ', Fs
-    # print 'r = ', r
-
-    # Difference equation coefficients
-    a1 = -2*r*cos(om1)
-    a2 = r**2
-
-    # print 'a1 = ', a1
-    # print 'a2 = ', a2
-
-    # Initialization
-    y1 = 0.0
-    y2 = 0.0
-    gain = 1000.0
-
-
-
-    for n in range(0, N):
-
-
-        # Use impulse as input signal
-        if n == 0:
-            x0 = 1.0
-        else:
-            x0 = 0.0
-
-        # Difference equation
-        y0 = x0 - a1 * y1 - a2 * y2
-
-        # Delays
-        y2 = y1
-        y1 = y0
-
-        # Output
-        out = gain * y0
-        # print out
-        # if out >= 2^15:
-        #     out = 2^14
-
-        str_out = struct.pack('h', out)    # 'h' for 16 bits
-
-        stream.write(str_out)
 
 def play_tone(pkt):
-
-    # Parameters
-
-    # src_addr = pkt.ip.src
-    # src_port = pkt[pkt.transport_layer].srcport
-    # dst_addr = pkt.ip.dst
-    # dst_port = pkt[pkt.transport_layer].dstport
-
-
 
     try:
 
         ip_id = pkt.ip.src
-        # ascii_string = str(base64.b16decode(pkt.ip_id))[2:-1]
-
         ipBroken = ip_id.split('.')
+        # print ip_id
 
-        print ip_id
+        src_port = pkt[pkt.transport_layer].srcport
+        # print src_port
+        dst_port = pkt[pkt.transport_layer].dstport
+        # print dst_port
 
-
-
-
-        #
+        # Intervals are set around the minor scale
         # min3 = 6/5.0
         # maj3 = 5/4.0
         # per4 = 4/4.0
         # per5 = 3/2.0
         # min7 = 16/9.0
 
-        intervals = [1,1/2.0,6/5.0,5/4.0,4/4.0,3/2.0,16/9.0]
+        intervals = [1,1/2.0,6/5.0,5/4.0,4/4.0,3/2.0,16/9.0, 6/10.0, 5/8.0, 3/4.0, 16/18.0]
 
-        # gene_tone(700 + int(float(ipBroken[2])), 0.2 , max(0.2, (float(ipBroken[2]))))
-        gen_tone(10,50,30,float(ipBroken[2])/100,100+int(float(ipBroken[2])))
+        # OSC1
+        T = 0.6 - (float(ipBroken[1])/100)
+        Ta = min(0.9*T, (float(ipBroken[2])/10))
+        f1 = 700 + int(ipBroken[2]) - (65535/float(dst_port))
+
+        # VIBRATO
+        LFO = 10 + 0.1*65535/float(dst_port)
+        W = float(src_port)/65535
+
+        osc = sm.oscTone(T,Ta,f1,Fs)
+        vib = sm.vibrato(osc,LFO,W,Fs)
+        bass = sm.oscTone(T,Ta,f1/4,Fs)
+        out = [sum(x) for x in zip(vib, bass)]
+        to_master(out)
+
+
         for mel in range(0,3):
-            gen_tone(10,50,30,10,random.choice(intervals)*(100+int(float(ipBroken[2]))))
-        #
-        #     # gene_tone(random.choice(intervals)*(700 + int(float(ipBroken[2]))), 0.2 , max(0.2 , (float(ipBroken[2]))))
-        #     gen_tone(int(float(ipBroken[3])),int(float(ipBroken[2])),int(float(ipBroken[1])),int(float(ipBroken[2])),random.choice(intervals)*(300+int(float(ipBroken[0]))))
+            out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
+            to_master(out)
 
         if pkt.ssl is not None:
             print "SSL is here"
+            outC = sm.oscTone(T*2,T*2,f1*2,Fs)
+            clipped = sm.clip(0.01,7,outC)
+            to_master(clipped)
+
+
+
 
     except AttributeError as e:
         pass
+        # print "ha!"
 
-s.start()
-capture.apply_on_packets(play_tone, timeout=100)
-s.stop()
+
+capture.apply_on_packets(play_tone, timeout=200)
+
+
 stream.stop_stream()
 stream.close()
 p.terminate()
-s.shutdown()
-quit()
+# wf.close()
+
+# quit()
