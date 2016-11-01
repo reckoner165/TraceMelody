@@ -15,24 +15,31 @@ import wave
 capture = pyshark.LiveCapture('Wi-Fi')
 
 # capture.sniff(timeout=20)
-def to_master(x):
+def to_master(x, L, R):
     # TO-DO:
     # Include channel array/panning
-    str_out = struct.pack('h'*len(x), *x)  # 'h' for 16 bits
+    for k in range(0,len(x)):
+        if x[k] > 32767:
+            x[k] = 32767
+        elif x[k] < -32768:
+            x[k] = -32768
+
+    str_out = sm.pan_stereo(x, L, R)
     stream.write(str_out)
     # wf.writeframes(str_out)
+
 
 Fs = 16000
 p = pyaudio.PyAudio()
 stream = p.open(format = pyaudio.paInt16,
-                        channels = 1,
+                        channels = 2,
                         rate = Fs,
                         input = False,
                         output = True)
 
 
 # RECORD TO FILE
-# wf = wave.open('SERIAL.wav', 'w')		# wf : wave file
+# wf = wave.open('SERIAL_home.wav', 'w')		# wf : wave file
 # wf.setnchannels(1);		# one channel (mono)
 # wf.setsampwidth(2)		# four bytes per sample
 # wf.setframerate(Fs)		# samples per second
@@ -92,37 +99,43 @@ def play_tone(pkt):
         intervals = [1,1/2.0,6/5.0,5/4.0,4/4.0,3/2.0,16/9.0, 6/10.0, 5/8.0, 3/4.0, 16/18.0]
 
         # OSC1
-        T = 0.6 - (float(ipBroken[1])/100)
-        Ta = min(0.9*T, (float(ipBroken[2])/10))
-        f1 = 700 + int(ipBroken[2]) - (65535/float(dst_port))
+        T = max(0.2,0.6 - (float(ipBroken[1])/100))
+        Ta = min(T, (float(ipBroken[2])/10))
+        f1 = 700 + int(ipBroken[2]) - (65535/max(0.0001,float(dst_port)))
 
         # VIBRATO
-        LFO = 10 + 0.1*65535/float(dst_port)
+        LFO = 10 + 0.1*65535/max(0.0001,float(dst_port))
         W = float(src_port)/65535
+        print W
 
         osc = sm.oscTone(T,Ta,f1,Fs)
         vib = sm.vibrato(osc,LFO,W,Fs)
         bass = sm.oscTone(T,Ta,f1/4,Fs)
-        out = [sum(x) for x in zip(vib, bass)]
-        to_master(out)
+
+        # TO-DO:
+        # Write a MIXER function that weights and adds signal blocks
+        out = [sum(x) for x in zip(sm.clip(0.5,1,vib), sm.clip(0.6,1,bass))]
+        # clipOut = sm.clip(0.6,1,out)
+        to_master(out,1,1)
 
 
         for mel in range(0,3):
             out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
-            to_master(out)
+            to_master(out, random.random(), random.random())
 
         if pkt.ssl is not None:
             print "SSL is here"
             outC = sm.oscTone(T*2,T*2,f1*2,Fs)
             clipped = sm.clip(0.01,7,outC)
-            to_master(clipped)
+            to_master(clipped,1,1)
 
 
 
 
     except AttributeError as e:
         pass
-        # print "ha!"
+        # print e
+
 
 
 capture.apply_on_packets(play_tone, timeout=200)

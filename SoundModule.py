@@ -3,9 +3,26 @@ __author__ = 'Sumanth Srinivasan'
 # Module containing real-time audio processing functions to generate tones and apply effects over a given block
 
 import math
+import struct
 from math import cos
 from math import pi
 
+# Pans audio by applying different gains on left and right channels
+def pan_stereo(x, gain_L, gain_R):
+
+    x_stereo = [0 for n in range(0,2*len(x))]
+    if gain_L > 1 or gain_L < 0 or gain_R > 1 or gain_R < 0:
+        print "Invalid Gain. Try between 0 and 1"
+
+    for n in range(0,len(x)):
+        x_stereo[2*n] = gain_L * x[n]
+        x_stereo[2*n + 1] = gain_R * x[n]
+
+    stereo = struct.pack('h'*2*len(x), *x_stereo)  # 'h' for 16 bits
+    return stereo
+
+# All 
+# Oscilators
 def oscTone(T, Ta, f1,Fs):
 
     N = int(T*Fs)    # N : Number of samples to play
@@ -43,6 +60,8 @@ def oscTone(T, Ta, f1,Fs):
 
     return outBlock
 
+
+# Effects modules
 def clip(fraction,gain,block):
     outBlock = [0 for n in range(0,len(block))]
 
