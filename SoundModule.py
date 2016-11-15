@@ -21,7 +21,7 @@ def pan_stereo(x, gain_L, gain_R):
     stereo = struct.pack('h'*2*len(x), *x_stereo)  # 'h' for 16 bits
     return stereo
 
-# All 
+# All
 # Oscilators
 def oscTone(T, Ta, f1,Fs):
 

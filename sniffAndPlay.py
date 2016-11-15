@@ -118,6 +118,8 @@ def play_tone(pkt):
         # clipOut = sm.clip(0.6,1,out)
         to_master(out,1,1)
 
+        # print dir(pkt.ip)
+        print pkt.ip.ttl
 
         for mel in range(0,3):
             out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
@@ -128,6 +130,8 @@ def play_tone(pkt):
             outC = sm.oscTone(T*2,T*2,f1*2,Fs)
             clipped = sm.clip(0.01,7,outC)
             to_master(clipped,1,1)
+
+
 
 
 
