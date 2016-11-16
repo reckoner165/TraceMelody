@@ -6,6 +6,7 @@ import math
 import struct
 from math import cos
 from math import pi
+import random
 
 # Pans audio by applying different gains on left and right channels
 def pan_stereo(x, gain_L, gain_R):
@@ -23,13 +24,13 @@ def pan_stereo(x, gain_L, gain_R):
 
 # All
 # Oscilators
-def oscTone(T, Ta, f1,Fs):
+def oscTone(T, decay, f,Fs):
 
     N = int(T*Fs)    # N : Number of samples to play
 
     # r, omega values to build a filter
-    om1 = 2.0*pi * float(f1)/Fs
-    r = 0.01**(1.0/(Ta*Fs))
+    om1 = 2.0*pi * float(f)/Fs
+    r = 0.01**(1.0/(T*Fs))
 
     # Difference equation coefficients
     a1 = -2*r*cos(om1)
@@ -60,8 +61,21 @@ def oscTone(T, Ta, f1,Fs):
 
     return outBlock
 
+def wnoise(T,decay,fs,gain):
+
+    duration = int(T* fs)
+    decay_samp = int(decay * fs)
+    a = math.log(0.01)/decay_samp
+
+    values = range(-32768, 32767)
+    outBlock = [math.exp(a*n)*gain*random.choice(values) for n in range(0,duration)]
+
+    return outBlock
+
 
 # Effects modules
+
+# Hard Clipping
 def clip(fraction,gain,block):
     outBlock = [0 for n in range(0,len(block))]
 
@@ -73,6 +87,7 @@ def clip(fraction,gain,block):
 
     return outBlock
 
+# Vibrato
 def vibrato(block,fL,WL,RATE):
     outBlock = [0 for n in range(0,len(block))]
     buffer_MAX = len(block)                          # Buffer length
@@ -113,3 +128,24 @@ def vibrato(block,fL,WL,RATE):
 
 
     return outBlock
+
+# def filterbank(filterN, gain, input):
+
+
+def mix(track1, track2):
+    len_list = [len(track1), len(track2)]
+    max_len = max(len_list)
+
+    track1 = [int(track1[n]) for n in range(0,len_list[0])]
+    track2 = [int(track2[n]) for n in range(0,len_list[1])]
+
+    track1.append([0 for n in range(0,max_len - len_list[0])])
+    track2.append([0 for n in range(0,max_len - len_list[1])])
+
+    track1 = [x for x in track1 if x != []]
+    track2 = [x for x in track2 if x != []]
+
+    outblock = [sum(x) for x in zip(track1, track2)]
+
+    return outblock
+

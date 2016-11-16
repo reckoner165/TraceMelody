@@ -1,32 +1,39 @@
 __author__ = 'Sumanth Srinivasan'
 
-
+# Network Modules
 import pyshark
-import base64
 import random
-import math
 
+# Audio related Modules
 import pyaudio
-import struct
 import SoundModule as sm
-
 import wave
+
+# Error Handling
+from trollius.executor import TimeoutError
+
 
 capture = pyshark.LiveCapture('Wi-Fi')
 
-# capture.sniff(timeout=20)
 def to_master(x, L, R):
     # TO-DO:
     # Include channel array/panning
+
+    # Clip amplitude to fit in bit range
     for k in range(0,len(x)):
         if x[k] > 32767:
             x[k] = 32767
         elif x[k] < -32768:
             x[k] = -32768
 
-    str_out = sm.pan_stereo(x, L, R)
+    str_out = sm.pan_stereo(x, L, R) # Returns a packed struct ready to write
     stream.write(str_out)
-    # wf.writeframes(str_out)
+
+
+
+    wf.writeframes(str_out)
+
+
 
 
 Fs = 16000
@@ -38,42 +45,12 @@ stream = p.open(format = pyaudio.paInt16,
                         output = True)
 
 
-# RECORD TO FILE
-# wf = wave.open('SERIAL_home.wav', 'w')		# wf : wave file
-# wf.setnchannels(1);		# one channel (mono)
-# wf.setsampwidth(2)		# four bytes per sample
-# wf.setframerate(Fs)		# samples per second
+# RECORD TO FILE (for documenting)
+wf = wave.open('SERIAL_home2.wav', 'w')		# wf : wave file
+wf.setnchannels(2);		# stereo
+wf.setsampwidth(2)		# four bytes per sample
+wf.setframerate(Fs)
 
-
-# def printHeader(pkt):
-#     try:
-#         protocol =  pkt.layers
-#         # http_user= pkt.http.user_agent
-#         # if "Firefox" in http_user:
-#         #     http_user="Firefox"
-#         # else:
-#         #     http_user="Chrome"
-#
-#         #
-#
-#
-#         ip_id=pkt.ip.id
-#         # ok=""
-#         # while random.random() > 0.1:
-#         #     ok+="    "
-#         ascii_string = str(base64.b16decode(pkt.ip_id))[2:-1]
-#         print (ascii_string)
-#         # ok=str(pkt.ip.id)
-#         # print ok
-#         # if pkt.ssl is not None:
-#         #     print "SSL is here"
-#         # handshake_length=pkt.ssl.handshake_length
-#
-#     except AttributeError as e:
-#             #ignore packets that aren't TCP/UDP or IPv4
-#             pass
-#
-# capture.apply_on_packets(printHeader, timeout=100)
 
 
 def play_tone(pkt):
@@ -83,6 +60,11 @@ def play_tone(pkt):
         ip_id = pkt.ip.src
         ipBroken = ip_id.split('.')
         # print ip_id
+        # print dir(pkt.layers)
+        a = pkt.layers
+        ssdp_flag = 'SSDP' in str(a[-1])
+        igmp_flag = 'IGMP' in str(a[-1])
+        print 'IGMP', igmp_flag
 
         src_port = pkt[pkt.transport_layer].srcport
         # print src_port
@@ -110,12 +92,15 @@ def play_tone(pkt):
 
         osc = sm.oscTone(T,Ta,f1,Fs)
         vib = sm.vibrato(osc,LFO,W,Fs)
-        bass = sm.oscTone(T,Ta,f1/4,Fs)
-
+        if ssdp_flag:
+            bass = sm.oscTone(T,Ta,f1/4,Fs)
+        else:
+            bass = sm.wnoise(T, Ta*0.3, Fs, 0.4)
         # TO-DO:
         # Write a MIXER function that weights and adds signal blocks
-        out = [sum(x) for x in zip(sm.clip(0.5,1,vib), sm.clip(0.6,1,bass))]
+        # out = [sum(x) for x in zip(sm.clip(0.5,1,vib), sm.clip(0.6,1,bass))]
         # clipOut = sm.clip(0.6,1,out)
+        out = sm.mix(sm.clip(0.5,1,vib),sm.clip(0.6,1,bass))
         to_master(out,1,1)
 
         # print dir(pkt.ip)
@@ -123,7 +108,8 @@ def play_tone(pkt):
 
         for mel in range(0,3):
             out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
-            to_master(out, random.random(), random.random())
+            pan = random.random()
+            to_master(out, pan, 1-pan)
 
         if pkt.ssl is not None:
             print "SSL is here"
@@ -132,22 +118,27 @@ def play_tone(pkt):
             to_master(clipped,1,1)
 
 
-
-
-
-
     except AttributeError as e:
-        pass
+        # pass
         # print e
+        pass
+
+
+try:
+    capture.apply_on_packets(play_tone, timeout=200)
+except TimeoutError as e2:
+    # Graceful timeout
+
+    wf.close()
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+    print 'Timeout'
+    quit()
 
 
 
-capture.apply_on_packets(play_tone, timeout=200)
+#
 
-
-stream.stop_stream()
-stream.close()
-p.terminate()
-# wf.close()
 
 # quit()
