@@ -35,8 +35,7 @@ def to_master(x, L, R):
 
 
 
-
-Fs = 16000
+Fs = 22000
 p = pyaudio.PyAudio()
 stream = p.open(format = pyaudio.paInt16,
                         channels = 2,
@@ -64,13 +63,15 @@ def play_tone(pkt):
         a = pkt.layers
         ssdp_flag = 'SSDP' in str(a[-1])
         igmp_flag = 'IGMP' in str(a[-1])
-        print 'IGMP', igmp_flag
+        # print 'IGMP', igmp_flag
+
 
         src_port = pkt[pkt.transport_layer].srcport
         # print src_port
         dst_port = pkt[pkt.transport_layer].dstport
         # print dst_port
-
+        if ssdp_flag:
+            print 'SSDP', ssdp_flag, dst_port
         # Intervals are set around the minor scale
         # min3 = 6/5.0
         # maj3 = 5/4.0
@@ -90,16 +91,17 @@ def play_tone(pkt):
         W = float(src_port)/65535
         print W
 
+        # FILTERBANK ARRAY
+        filtArray = [2,3,4,5,6]
+
         osc = sm.oscTone(T,Ta,f1,Fs)
         vib = sm.vibrato(osc,LFO,W,Fs)
         if ssdp_flag:
             bass = sm.oscTone(T,Ta,f1/4,Fs)
         else:
-            bass = sm.wnoise(T, Ta*0.3, Fs, 0.4)
-        # TO-DO:
-        # Write a MIXER function that weights and adds signal blocks
-        # out = [sum(x) for x in zip(sm.clip(0.5,1,vib), sm.clip(0.6,1,bass))]
-        # clipOut = sm.clip(0.6,1,out)
+            noise = sm.wnoise(T, Ta*1.5, Fs, 1)
+            bass = sm.filterbank_22k(random.choice(filtArray),0.8,noise)
+
         out = sm.mix(sm.clip(0.5,1,vib),sm.clip(0.6,1,bass))
         to_master(out,1,1)
 

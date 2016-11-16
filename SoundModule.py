@@ -76,12 +76,12 @@ def wnoise(T,decay,fs,gain):
 # Effects modules
 
 # Hard Clipping
-def clip(fraction,gain,block):
+def clip(ratio,gain,block):
     outBlock = [0 for n in range(0,len(block))]
 
     for n in range(0,len(block)):
-        if block[n] >= (fraction * gain * block[n]):
-            outBlock[n] = int(fraction * gain * block[n])
+        if block[n] >= (ratio * gain * block[n]):
+            outBlock[n] = int(ratio * gain * block[n])
         else:
             outBlock[n] = int(gain * block[n])
 
@@ -129,8 +129,83 @@ def vibrato(block,fL,WL,RATE):
 
     return outBlock
 
-# def filterbank(filterN, gain, input):
+def filterbank_22k(filterN, gain, input):
+    # A bank of bandpass filters at various frequencies triggered by coefficients.
 
+    # List of coefficients and their center frequencies
+    # 1 - 100Hz ***DOES NOT WORK***
+    # 2 - 500Hz
+    # 3 - 1000Hz
+    # 4 - 2000Hz
+    # 5 - 5000Hz
+    # 6 - 10000Hz
+
+
+    filtB = [[0.0001,0.0000,-0.0003,0.0000,0.0001],
+             [0.0001,0.0000,-0.0003,0.0000,0.0001],
+             [0.0001,0.0000,-0.0003,0.0000,0.0001],
+             [0.0001,0.0000,-0.0003,0.0000,0.0001],
+             [0.0001,0.0000,-0.0003,0.0000,0.0001],
+             [0.0001,0.0000,-0.0003,0.0000,0.0001]]
+
+    filtA = [[1.0000,-3.9584,5.8772,-3.8793,0.9604],
+             [1.0000,-3.9197,5.8010,-3.8413,0.9604],
+             [1.0000,-3.7996,5.5692,-3.7236,0.9604],
+             [1.0000,-3.3314,4.7344,-3.2648,0.9604],
+             [1.0000,-0.5636,2.0390,-0.5523,0.9604],
+             [1.0000,3.7996,5.5692,3.7236,0.9604]]
+
+
+    b = filtB[filterN-1]
+    a = filtA[filterN-1]
+
+    # Difference Equation
+
+    y1 = 0.0000
+    y2 = 0.0000
+    y3 = 0.0000
+    y4 = 0.0000
+
+    x1 = 0.0000
+    x2 = 0.0000
+    x3 = 0.0000
+    x4 = 0.0000
+
+
+    outBlock = [0 for n in range(0,len(input))]
+    for n in range(0, len(input)):
+        # Use impulse as input signal
+        x0 = input[n]
+
+        # Difference equation
+        y0 = b[0]*x0 + b[1]*x1 + b[2]*x2 + b[3]*x3 + b[4]*x4 - a[1]*y1 - a[2]*y2 - a[3]*y3 - a[4]*y4
+
+        # Delays
+        y4 = y3
+        y3 = y2
+        y2 = y1
+        y1 = y0
+
+        x4 = x3
+        x3 = x2
+        x2 = x1
+        x1 = x0
+
+
+        # Output
+        outBlock[n] = gain*y0
+
+    for k in range(0,len(outBlock)):
+        if outBlock[k] > 32767:
+            outBlock[k] = 32767
+        elif outBlock[k] < -32768:
+            outBlock[k] = -32768
+    outBlock = [x for x in outBlock if not math.isnan(x)]
+
+    return outBlock
+
+
+# return [0 for n in range(0, len(input))]
 
 def mix(track1, track2):
     len_list = [len(track1), len(track2)]
@@ -146,6 +221,8 @@ def mix(track1, track2):
     track2 = [x for x in track2 if x != []]
 
     outblock = [sum(x) for x in zip(track1, track2)]
+
+
 
     return outblock
 
