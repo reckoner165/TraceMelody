@@ -11,6 +11,7 @@ SERIAL is an attempt to create a sonic footprint of the internet that seeks to n
 
 1. Create a local clone in a system with Python version 2.7.10
 2. Install tshark and pyshark (Python wrapper for sniffing using tshark framework)
+
   Linux:
   `pip install tshark` 
 
