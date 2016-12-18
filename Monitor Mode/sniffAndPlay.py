@@ -9,6 +9,8 @@ import pyaudio
 import SoundModule as sm
 import wave
 
+import datetime
+
 # Error Handling
 from trollius.executor import TimeoutError
 
@@ -29,8 +31,6 @@ def to_master(x, L, R):
     str_out = sm.pan_stereo(x, L, R) # Returns a packed struct ready to write
     stream.write(str_out)
 
-
-
     wf.writeframes(str_out)
 
 
@@ -45,7 +45,11 @@ stream = p.open(format = pyaudio.paInt16,
 
 
 # RECORD TO FILE (for documenting)
-wf = wave.open('SERIAL_demo.wav', 'w')		# wf : wave file
+x = str(datetime.datetime.now())
+y = x.split('.')
+filename = 'SERIAL_'+'-'.join('_'.join(y[0].split(' ')).split(':')) + '.wav'
+wf = wave.open(filename, 'w')		# wf : wave file
+
 wf.setnchannels(2);		# stereo
 wf.setsampwidth(2)		# four bytes per sample
 wf.setframerate(Fs)
@@ -141,38 +145,47 @@ def play_tone(pkt):
 
         # MAC ADDRESS AND SOUND MAPPING LISTS
 
-        T = 0.5
+        
+        # T2 = T[:]
         # FILTERBANK ARRAY
         filtArray = [2,3,4,5,6]
 
         all_layers=pkt.layers
         last_layer = all_layers[-1]
+        print all_layers
+        # print type(last_layer)
         # print last_layer
-        dataString = last_layer.DATA_LAYER
-        print '-------------'
+        # if "DATA Layer" in last_layer:
+        #     dataString = last_layer.DATA_LAYER
+        #     print dataString
+        # print '-------------'
         for layer in all_layers:
-            layer_name=layer._layer_name
+            layer_name= layer._layer_name
 
             # if "wlan" in layer_name:
             #     print layer
+            # if "DATA" in layer_name:
+            #         print 1
+            #         print layer_name
+            #         print layer
 
             if "radiotap" in layer_name:
-                print "radio!"
-                # print dir(layer);
+                print "Banter."
+                # Uses the channel frequency band to inform basic oscillator frequency
                 flag2ghz = int(layer.channel_flags_2ghz)
                 flag5ghz = int(layer.channel_flags_5ghz)
                 if flag2ghz == 1:
                     channel_freq = 3 + random.choice(range(1, 20))
-                if flag5ghz == 1:
+                elif flag5ghz == 1:
                     channel_freq = 400+random.choice(range(5, 20))
                 ssl_tone = sm.oscTone(T,T,channel_freq,Fs)
                 ssl_tone = sm.vibrato(ssl_tone,8,0.05,Fs)
                 mix = sm.clip(0.9,1,ssl_tone)
-                # to_master(sm.clip(0.9,1,ssl_tone),1,1)
 
-            if "wlan" in layer_name:
+            elif "wlan" in layer_name:
                 if "radio" not in layer_name:
-
+                    print dir(layer)
+                    # print layer.flags()
                     if 'ta' in dir(layer):
                         trans_addr =layer.ta
                         if trans_addr in mac_list:
@@ -187,55 +200,94 @@ def play_tone(pkt):
                             device_tone = sm.oscTone(T*random.random(),T,device_freq,Fs)
                             device_tone = sm.vibrato(device_tone,10,7,Fs)
                             to_master(device_tone,1,1)
-                            print len(mac_list),len(sound_list),device,device_freq
+                            # print len(mac_list),len(sound_list),device,device_freq
+                            print len(mac_list),'devices on the network. Device', device, 'said something.'
                         except IndexError as I:
+
                             pass
 
                         if 'ra' in dir(layer):
                             rec_addr=layer.ra
                             # print 'trans: ', trans_addr, ',rec: ', rec_addr
                             if rec_addr == 'ff:ff:ff:ff:ff:ff':
-                                print 'There\'s a BROADCAST from', trans_addr
+                                # print 'There\'s a BROADCAST from device ', device, ' MAC: ', trans_addr
+                                print '...to everybody.'
+                            elif rec_addr in mac_list:
+                                rec_device = mac_list.index(rec_addr)
+                                rec_freq = 2*sound_list[device]
+                                rec_tone = sm.oscTone(T*random.random(),T,rec_freq,Fs)
+                                to_master(rec_tone,1,1)
+                                print 'Device', rec_device, 'heard something.'
+
+                        # if 'Missing' in layer:
+
+                        # print layer_words.count('Missing')
 
                     noise = sm.wnoise(T,1.5*T,Fs,1)
                     filtered = sm.filterbank_22k(random.choice(filtArray),1,noise)
                     mix = sm.mix(sm.clip(0.9,1,ssl_tone),sm.clip(0.9,1,filtered))
 
                     if "wlan_mgt" in layer_name:
-                        mgt_tone = sm.oscTone(T,T*0.5,1100,Fs)
+                        
+                        # T = 2*T
+                        mgt_tone = sm.oscTone(2*T,T*1.2,1100,Fs)
                         mix = sm.mix(mix,sm.clip(0.9,1,mgt_tone))
 
-            if "tcp" in layer_name:
+            elif "tcp" in layer_name:
                 ssl_tone = sm.oscTone(2*T,1.2*T,500,Fs)
                 mix = sm.mix(sm.clip(0.9,1,ssl_tone),sm.clip(0.9,1,mix))
                 # print(layer)
 
-            if "ip" in layer_name:
+            elif "ip" in layer_name:
                     print "This packet wasn't secured."
                     ip_tone(layer)
 
-        to_master(mix,1,1)
+            if '__sizeof__' in dir(layer):
+                print layer.__sizeof__(), 'what'
+                print '----------- \n ---------'
+
+
+
+        # T = T2[:]
+        pan = random.random()
+        to_master(mix,pan,1-pan)
+        
+        
 
     except AttributeError as e:
-        # pass
-        print e
+        # print e
         pass
 
     except TypeError as te:
         pass
 
+    except IndexError as ie:
+        pass
 
-try:
-    capture.apply_on_packets(play_tone, timeout=100)
-except TimeoutError as e2:
-    # Graceful timeout
+# Score
+# Global Time
+global T
 
-    wf.close()
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-    print 'Timeout'
-    quit()
+# Note durations
+time = [1, 0.5, 2, 0.3, 2]
+# Section duration
+section_dur = [30, 30, 30, 30, 30]
+
+# Actual packet sniffing score
+for t in range(0,len(time)):
+    T = time[t]
+    try:
+        capture.apply_on_packets(play_tone, timeout=section_dur[t])
+
+    except TimeoutError as e2:
+        pass
+
+wf.close()
+stream.stop_stream()
+stream.close()
+p.terminate()
+print 'Done'
+quit()
 
 
 
@@ -243,3 +295,4 @@ except TimeoutError as e2:
 
 
 # quit()
+cc = pyshark.LiveCapture()
