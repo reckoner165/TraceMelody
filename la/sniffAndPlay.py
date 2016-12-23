@@ -15,13 +15,13 @@ import datetime
 from trollius.executor import TimeoutError
 
 
-# Initialize capture - (Optimized for Mac OS systems)
 capture = pyshark.LiveCapture('en1')
 
-# Process handles writing all processed/synthesized sounds to stream and file.
 def to_master(x, L, R):
+    # TO-DO:
+    # Include channel array/panning
 
-    # Hard Clip amplitude to fit in bit range
+    # Clip amplitude to fit in bit range
     for k in range(0,len(x)):
         if x[k] > 32767:
             x[k] = 32767
@@ -34,7 +34,7 @@ def to_master(x, L, R):
     wf.writeframes(str_out)
 
 
-# Initialize PyAudio
+
 Fs = 22000
 p = pyaudio.PyAudio()
 stream = p.open(format = pyaudio.paInt16,
@@ -44,17 +44,15 @@ stream = p.open(format = pyaudio.paInt16,
                         output = True)
 
 
-# RECORD TO FILE (documenting)
+# RECORD TO FILE (for documenting)
 x = str(datetime.datetime.now())
 y = x.split('.')
 filename = 'SERIAL_'+'-'.join('_'.join(y[0].split(' ')).split(':')) + '.wav'
 wf = wave.open(filename, 'w')		# wf : wave file
 
-wf.setnchannels(2)		# stereo
+wf.setnchannels(2);		# stereo
 wf.setsampwidth(2)		# four bytes per sample
 wf.setframerate(Fs)
-
-
 
 # GLOBAL VARIABLES
 mac_list = []
@@ -75,10 +73,14 @@ def ip_tone(layer):
     #     # print 'IGMP', igmp_flag
     #
     #
-        # Hard coded for demo. Can be parameterized in case of an unsecured network
+        # src_port = layer.src
         src_port = 100
         dst_port = 4589
-
+        # print src_port
+        # dst_port = layer.dst
+        # print dst_port
+    #     if ssdp_flag:
+    #         print 'SSDP', ssdp_flag, dst_port
     #     # Intervals are set around the minor scale
     #     # min3 = 6/5.0
     #     # maj3 = 5/4.0
@@ -119,10 +121,10 @@ def ip_tone(layer):
     #
         for mel in range(0,3):
             # if ssdp_flag:
-            mel_out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
+            #     mel_out = sm.oscTone(0.8*T,0.8*Ta,random.choice(intervals)*f1,Fs)
             # else:
-            # ssl_noise = sm.wnoise(0.9*T, Ta*1.5, Fs, 1)
-            # mel_out = sm.filterbank_22k(random.choice(filtArray),0.8,ssl_noise)
+            ssl_noise = sm.wnoise(0.9*T, Ta*1.5, Fs, 1)
+            mel_out = sm.filterbank_22k(random.choice(filtArray),0.8,ssl_noise)
             pan = random.random()
             to_master(mel_out, pan, 1-pan)
     #
@@ -139,8 +141,12 @@ def play_tone(pkt):
     # DEBUG TRY BLOCK MONITOR MODE
     try:
 
+
+
         # MAC ADDRESS AND SOUND MAPPING LISTS
 
+        
+        # T2 = T[:]
         # FILTERBANK ARRAY
         filtArray = [2,3,4,5,6]
 
@@ -148,7 +154,7 @@ def play_tone(pkt):
         last_layer = all_layers[-1]
         print all_layers
         # print type(last_layer)
-        print last_layer
+        # print last_layer
         # if "DATA Layer" in last_layer:
         #     dataString = last_layer.DATA_LAYER
         #     print dataString
@@ -178,6 +184,8 @@ def play_tone(pkt):
 
             elif "wlan" in layer_name:
                 if "radio" not in layer_name:
+                    print dir(layer)
+                    # print layer.flags()
                     if 'ta' in dir(layer):
                         trans_addr =layer.ta
                         if trans_addr in mac_list:
@@ -192,14 +200,17 @@ def play_tone(pkt):
                             device_tone = sm.oscTone(T*random.random(),T,device_freq,Fs)
                             device_tone = sm.vibrato(device_tone,10,7,Fs)
                             to_master(device_tone,1,1)
-                            print len(mac_list),'devices discovered on the network. Device', device, 'said something.'
+                            # print len(mac_list),len(sound_list),device,device_freq
+                            print len(mac_list),'devices on the network. Device', device, 'said something.'
                         except IndexError as I:
 
                             pass
 
                         if 'ra' in dir(layer):
-                            rec_addr = layer.ra
+                            rec_addr=layer.ra
+                            # print 'trans: ', trans_addr, ',rec: ', rec_addr
                             if rec_addr == 'ff:ff:ff:ff:ff:ff':
+                                # print 'There\'s a BROADCAST from device ', device, ' MAC: ', trans_addr
                                 print '...to everybody.'
                             elif rec_addr in mac_list:
                                 rec_device = mac_list.index(rec_addr)
@@ -208,25 +219,44 @@ def play_tone(pkt):
                                 to_master(rec_tone,1,1)
                                 print 'Device', rec_device, 'heard something.'
 
+                        # if 'Missing' in layer:
+
+                        # print layer_words.count('Missing')
+
                     noise = sm.wnoise(T,1.5*T,Fs,1)
                     filtered = sm.filterbank_22k(random.choice(filtArray),1,noise)
                     mix = sm.mix(sm.clip(0.9,1,ssl_tone),sm.clip(0.9,1,filtered))
 
                     if "wlan_mgt" in layer_name:
-
+                        
+                        # T = 2*T
                         mgt_tone = sm.oscTone(2*T,T*1.2,1100,Fs)
                         mix = sm.mix(mix,sm.clip(0.9,1,mgt_tone))
 
             elif "tcp" in layer_name:
                 ssl_tone = sm.oscTone(2*T,1.2*T,500,Fs)
                 mix = sm.mix(sm.clip(0.9,1,ssl_tone),sm.clip(0.9,1,mix))
+                # print(layer)
 
             elif "ip" in layer_name:
                     print "This packet wasn't secured."
                     ip_tone(layer)
+                    mix = sm.oscTone(T*random.random(),T,900,Fs)
 
+            elif "ARP" in layer_name:
+                    mix = sm.wnoise(T,1.5*T,Fs,1)
+
+            if '__sizeof__' in dir(layer):
+                print layer.__sizeof__(), 'what'
+                print '----------- \n ---------'
+
+
+
+        # T = T2[:]
         pan = random.random()
         to_master(mix,pan,1-pan)
+        
+        
 
     except AttributeError as e:
         # print e
@@ -238,8 +268,7 @@ def play_tone(pkt):
     except IndexError as ie:
         pass
 
-# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-# Score Information
+# Score
 # Global Time
 global T
 
@@ -248,7 +277,7 @@ time = [1, 0.5, 2, 0.3, 2]
 # Section duration
 section_dur = [30, 30, 30, 30, 30]
 
-# Actual packet sniffing and callback functions follow Score parameters
+# Actual packet sniffing score
 for t in range(0,len(time)):
     T = time[t]
     try:
@@ -263,3 +292,11 @@ stream.close()
 p.terminate()
 print 'Done'
 quit()
+
+
+
+#
+
+
+# quit()
+cc = pyshark.LiveCapture()
