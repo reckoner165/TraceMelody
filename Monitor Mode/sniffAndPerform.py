@@ -140,6 +140,7 @@ def ip_tone(layer):
 def play_tone(pkt):
     # DEBUG TRY BLOCK MONITOR MODE
     try:
+        print t
 
         # MAC ADDRESS AND SOUND MAPPING LISTS
 
@@ -176,7 +177,7 @@ def play_tone(pkt):
                     channel_freq = 200+random.choice(range(15, 70))
                 elif flag5ghz == 1:
 
-                    channel_freq = 60 + random.choice(range(1, 20))
+                    channel_freq = 20 + 10*random.choice(range(1, 4))
                 ssl_tone = sm.oscTone(T,T,channel_freq,Fs)
 
                 ssl_tone = sm.vibrato(ssl_tone,8,0.05,Fs)
@@ -199,7 +200,8 @@ def play_tone(pkt):
                             device_freq = sound_list[device]
                             device_tone = sm.oscTone(T*random.random(),T,device_freq,Fs)
                             device_tone = sm.vibrato(device_tone,random.choice(range(5,10)),random.choice(range(1,5)),Fs)
-                            to_master(device_tone,1,1)
+                            device_pan = random.random()
+                            to_master(device_tone,1-device_pan,device_pan)
                             print len(mac_list),'devices discovered on the network. Device', device, 'said something.'
                         except IndexError as I:
 
@@ -212,9 +214,10 @@ def play_tone(pkt):
                             elif rec_addr in mac_list:
                                 rec_device = mac_list.index(rec_addr)
                                 rec_freq = 2*sound_list[device]
-                                for n in range(1,4):
-                                    rec_tone = sm.oscTone(T*random.random(),T,random.choice(intervals)*rec_freq,Fs)
-                                    to_master(rec_tone,1,1)
+                                for n in range(1,rec_device):
+                                    dur = T*0.2
+                                    rec_tone = sm.oscTone(dur,0.8*dur,random.choice(intervals)*rec_freq,Fs)
+                                    to_master(sm.clip(0.5,2,rec_tone),1,1)
                                 print 'Device', rec_device, 'heard something.'
 
                     noise = sm.wnoise(T,1.5*T,Fs,1)
@@ -228,7 +231,10 @@ def play_tone(pkt):
                         mgt_tone = sm.oscTone(2*T,T*1.2,1100,Fs)
                         mix = sm.mix(mix,sm.clip(0.6,1,mgt_tone))
                 else:
-                    to_master()
+                    pan_wlan_radio = random.random()
+                    wlan_radio_tone = sm.oscTone(1.2*T,T,400+50*random.random(),Fs)
+                    wlan_radio_tone = sm.vibrato(wlan_radio_tone,100,0.1,Fs)
+                    to_master(wlan_radio_tone,pan_wlan_radio,1-pan_wlan_radio)
 
             elif "tcp" in layer_name:
                 ssl_tone = sm.oscTone(2*T,1.2*T,500,Fs)
@@ -240,7 +246,7 @@ def play_tone(pkt):
 
             elif "llc" in layer_name:
                 for n in range(1,3):
-                    to_master(sm.clip(0.6,1,sm.oscTone(T,T*1.2,300*n,Fs)),1,1)
+                    to_master(sm.clip(0.6,1,sm.oscTone(T,T*1.2,300*n,Fs)),random.random(),random.random())
 
         pan = random.random()
         to_master(mix,pan,1-pan)
@@ -269,14 +275,14 @@ global T
 
 #
 # DEBUG SCORE
-time = [2.5, 1.5, 1, 0.5, 0.2]
+time = [0.5]
 # Section duration
-section_dur = [20, 20, 20, 20, 20]
+section_dur = [200]
 
 # Actual packet sniffing and callback functions follow Score parameters
 for t in range(0,len(time)):
     T = time[t]
-    print 'SECTION',t
+    # print 'SECTION',t
     try:
 
         capture.apply_on_packets(play_tone, timeout=section_dur[t])
